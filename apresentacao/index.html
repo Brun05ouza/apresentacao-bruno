@@ -963,6 +963,15 @@ renderContent=function(s,i){
 
     const formatTime = seconds => `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
 
+    function updatePresenterTimer() {
+      if (!presenter || presenter.closed) return;
+      const doc = presenter.document;
+      const elapsed = presentationElapsed + (presentationStart === null ? 0 : performance.now() - presentationStart);
+      doc.getElementById('presenter-time').textContent = formatTime(Math.floor(elapsed / 1000));
+      doc.getElementById('presenter-start').disabled = presentationStart !== null;
+      doc.getElementById('presenter-stop').disabled = presentationStart === null;
+    }
+
     function updatePresenter() {
       const button = document.getElementById('notes-button');
       if (!presenter || presenter.closed) { button.setAttribute('aria-pressed', 'false'); return; }
@@ -979,10 +988,7 @@ renderContent=function(s,i){
         doc.getElementById('notes-save-status').textContent = Object.prototype.hasOwnProperty.call(editedNotes, current) ? 'Alterações salvas neste navegador' : 'Clique no texto para editar · salvamento automático';
       }
       doc.getElementById('presenter-next').textContent = slides[current + 1] ? `A seguir: ${slides[current + 1].titulo}` : 'Último slide';
-      const elapsed = presentationElapsed + (presentationStart === null ? 0 : performance.now() - presentationStart);
-      doc.getElementById('presenter-time').textContent = formatTime(Math.floor(elapsed / 1000));
-      doc.getElementById('presenter-start').disabled = presentationStart !== null;
-      doc.getElementById('presenter-stop').disabled = presentationStart === null;
+      updatePresenterTimer();
       doc.getElementById('presenter-budget').textContent = 'Tempo sugerido: ' + formatTime(slides[current].tempo);
       doc.getElementById('presenter-prev').disabled = current === 0;
       doc.getElementById('presenter-forward').disabled = current === slides.length - 1;
@@ -1056,6 +1062,10 @@ button:focus-visible{outline:3px solid #2f9e6e;outline-offset:3px}
       doc.addEventListener('keydown', handleKey);
       presenter.addEventListener('beforeunload', () => { document.getElementById('notes-button').setAttribute('aria-pressed', 'false'); });
       updatePresenter();
+      // Schedule updates in the visible notes window, independently of background slide timers.
+      presenter.setInterval(updatePresenterTimer, 250);
+      presenter.addEventListener('focus', updatePresenterTimer);
+      doc.addEventListener('visibilitychange', updatePresenterTimer);
     }
 
     function handleKey(event) {
@@ -1084,7 +1094,6 @@ button:focus-visible{outline:3px solid #2f9e6e;outline-offset:3px}
     motionQuery.addEventListener('change', () => {
       if (motionQuery.matches) { cancelAnimationFrame(countFrame); sections[current].querySelectorAll('[data-count]').forEach(el => { el.textContent = el.dataset.count; }); }
     });
-    setInterval(updatePresenter, 1000);
     const initialHash = location.hash.match(/^#slide-(\d+)$/);
     showSlide(initialHash ? Number(initialHash[1]) - 1 : 0);
 
