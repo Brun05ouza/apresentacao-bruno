@@ -827,12 +827,6 @@ renderContent=function(s,i){
       }
     } catch { /* Notes remain editable when browser storage is unavailable. */ }
 
-    function sizeNotesEditor(doc) {
-      const editor = doc.getElementById('presenter-notes');
-      editor.style.height = 'auto';
-      editor.style.height = Math.max(330, editor.scrollHeight + 4) + 'px';
-    }
-
     const deck = document.getElementById('deck');
     slides.forEach((slide, index) => {
       const section = document.createElement('section');
@@ -869,6 +863,26 @@ renderContent=function(s,i){
     let statusTimer;
     let presenter = null;
     let presentationStart = null;
+    let presentationElapsed = 0;
+
+    function startTimer() {
+      if (presentationStart !== null) return;
+      presentationStart = performance.now();
+      updatePresenter();
+    }
+
+    function stopTimer() {
+      if (presentationStart === null) return;
+      presentationElapsed += performance.now() - presentationStart;
+      presentationStart = null;
+      updatePresenter();
+    }
+
+    function resetTimer() {
+      presentationStart = null;
+      presentationElapsed = 0;
+      updatePresenter();
+    }
 
     function announce(message) {
       const status = document.getElementById('status');
@@ -935,7 +949,6 @@ renderContent=function(s,i){
         // Some file:// browser policies restrict history; navigation still works.
         try { history.replaceState(null, '', `#slide-${next + 1}`); } catch { /* local file navigation remains available */ }
       }
-      if (previous >= 0 && presentationStart === null) presentationStart = Date.now();
       animateCounts(incoming);
       updatePresenter();
     }
@@ -959,13 +972,17 @@ renderContent=function(s,i){
       doc.getElementById('presenter-title').textContent = slides[current].titulo;
       if (doc.body.dataset.slide !== String(current)) {
         doc.body.dataset.slide = String(current);
-        doc.getElementById('presenter-notes').value = slides[current].notas;
+        const editor = doc.getElementById('presenter-notes');
+        editor.value = slides[current].notas;
+        editor.scrollTop = 0;
+        editor.scrollLeft = 0;
         doc.getElementById('notes-save-status').textContent = Object.prototype.hasOwnProperty.call(editedNotes, current) ? 'Alterações salvas neste navegador' : 'Clique no texto para editar · salvamento automático';
-        sizeNotesEditor(doc);
-        presenter.scrollTo(0, 0);
       }
       doc.getElementById('presenter-next').textContent = slides[current + 1] ? `A seguir: ${slides[current + 1].titulo}` : 'Último slide';
-      doc.getElementById('presenter-time').textContent = formatTime(presentationStart === null ? 0 : Math.floor((Date.now() - presentationStart) / 1000));
+      const elapsed = presentationElapsed + (presentationStart === null ? 0 : performance.now() - presentationStart);
+      doc.getElementById('presenter-time').textContent = formatTime(Math.floor(elapsed / 1000));
+      doc.getElementById('presenter-start').disabled = presentationStart !== null;
+      doc.getElementById('presenter-stop').disabled = presentationStart === null;
       doc.getElementById('presenter-budget').textContent = 'Tempo sugerido: ' + formatTime(slides[current].tempo);
       doc.getElementById('presenter-prev').disabled = current === 0;
       doc.getElementById('presenter-forward').disabled = current === slides.length - 1;
@@ -978,7 +995,46 @@ renderContent=function(s,i){
       if (!presenter) { announce('Permita pop-ups para abrir a janela privada de notas.'); return; }
       const doc = presenter.document;
       doc.open();
-      doc.write("<!doctype html><html lang=\"pt-BR\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>EcoSphere · Notas do orador</title><style>\n*{box-sizing:border-box}body{margin:0;background:#fff;color:#24392c;font-family:\"Segoe UI\",Arial,sans-serif;line-height:1.6}header{display:flex;align-items:center;gap:20px;padding:18px 30px;border-bottom:1px solid #dbe8df;background:#f3faf6}h1{font-size:16px;line-height:1.35;margin:0;font-weight:600;flex:1}#presenter-position{font-size:14px;white-space:nowrap;color:#4b5a50}time{font-size:19px;font-variant-numeric:tabular-nums;white-space:nowrap}main{max-width:1050px;margin:auto;padding:25px 35px 120px}aside h2{font-size:12px;letter-spacing:1.5px;text-transform:uppercase;font-weight:600;color:#688471;margin:0 0 18px}#presenter-notes{font-size:clamp(24px,3vw,31px);line-height:1.8;margin:0;white-space:pre-wrap}footer{position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:1px solid #dbe8df;padding:12px 25px;display:flex;align-items:center;gap:16px;flex-wrap:wrap}nav{display:flex;gap:8px}button{font:inherit;font-size:14px;padding:8px 14px;border:1px solid #c5dace;border-radius:6px;color:#1b5e3b;background:#f3faf6;cursor:pointer}button:disabled{opacity:.35;cursor:default}button:focus-visible{outline:3px solid #2f9e6e;outline-offset:3px}.meta{margin-left:auto;text-align:right;font-size:12px;color:#688471}.meta p{margin:2px 0}#presenter-next{max-width:360px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}@media(max-width:600px){header{padding:14px 20px;gap:12px}h1{font-size:13px}main{padding:20px 23px 165px}.meta{width:100%;text-align:left;margin:0}#presenter-notes{font-size:24px}footer{padding:10px 20px}nav{flex-wrap:wrap}}@media print{body{display:none}}\n#presenter-notes{display:block;width:100%;font-family:inherit;color:inherit;background:transparent;border:1px solid transparent;border-radius:8px;padding:10px 12px;resize:none;overflow:hidden;min-height:330px}#presenter-notes:hover{border-color:#dbe8df}#presenter-notes:focus{outline:2px solid #a6cbb5;outline-offset:3px}#notes-save-status{font-size:12px;color:#688471;margin:0 0 12px}aside h2{margin-bottom:6px}</style></head><body><header><span id=\"presenter-position\"></span><h1 id=\"presenter-title\"></h1><time id=\"presenter-time\">00:00</time></header><main><aside aria-label=\"Notas do orador\"><h2>Seu roteiro de fala</h2><p id=\"notes-save-status\" role=\"status\"></p><textarea id=\"presenter-notes\" aria-label=\"Editar notas do orador\" spellcheck=\"true\" lang=\"pt-BR\"></textarea></aside></main><footer><nav aria-label=\"Navegação do orador\"><button id=\"presenter-prev\" type=\"button\">Anterior</button><button id=\"presenter-forward\" type=\"button\">Próximo</button><button id=\"presenter-reset\" type=\"button\">Zerar relógio</button></nav><div class=\"meta\"><p id=\"presenter-budget\"></p><p id=\"presenter-next\"></p></div></footer></body></html>");
+      doc.write(`<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>EcoSphere · Notas do orador</title>
+<style>
+*{box-sizing:border-box}
+html{height:100%;overflow:hidden}
+body{height:100vh;height:100dvh;margin:0;overflow:hidden;display:flex;flex-direction:column;background:#fff;color:#24392c;font-family:"Segoe UI",Arial,sans-serif;line-height:1.6}
+header{display:flex;flex-shrink:0;align-items:center;gap:20px;padding:18px 30px;border-bottom:1px solid #dbe8df;background:#f3faf6}
+h1{min-width:0;font-size:16px;line-height:1.35;margin:0;font-weight:600;flex:1;overflow-wrap:anywhere}
+#presenter-position{font-size:14px;white-space:nowrap;color:#4b5a50}
+time{font-size:19px;font-variant-numeric:tabular-nums;white-space:nowrap}
+main{display:flex;flex:1;min-height:0;width:100%;max-width:1050px;margin:0 auto;padding:25px 35px 20px}
+aside{display:flex;flex:1;flex-direction:column;min-width:0;min-height:0}
+aside h2{flex-shrink:0;font-size:12px;letter-spacing:1.5px;text-transform:uppercase;font-weight:600;color:#688471;margin:0 0 6px}
+#notes-save-status{flex-shrink:0;font-size:12px;color:#688471;margin:0 0 12px}
+/* Only the editor scrolls; the header and footer reserve their own space. */
+#presenter-notes{display:block;flex:1;min-height:0;width:100%;margin:0;padding:12px 16px 32px;font-family:inherit;font-size:clamp(24px,3vw,31px);line-height:1.8;color:inherit;background:transparent;border:1px solid transparent;border-radius:8px;resize:none;overflow-y:auto;overflow-x:hidden;white-space:pre-wrap;overflow-wrap:anywhere;scrollbar-gutter:stable}
+#presenter-notes:hover{border-color:#dbe8df}
+#presenter-notes:focus{outline:2px solid #a6cbb5;outline-offset:3px}
+footer{flex-shrink:0;background:#fff;border-top:1px solid #dbe8df;padding:12px 25px;display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+nav,.timer-controls{display:flex;gap:8px;flex-wrap:wrap}
+button{font:inherit;font-size:14px;padding:8px 14px;border:1px solid #c5dace;border-radius:6px;color:#1b5e3b;background:#f3faf6;cursor:pointer}
+button:disabled{opacity:.35;cursor:default}
+button:focus-visible{outline:3px solid #2f9e6e;outline-offset:3px}
+.meta{min-width:0;margin-left:auto;text-align:right;font-size:12px;color:#688471}
+.meta p{margin:2px 0}
+#presenter-next{max-width:360px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+@media(max-width:600px){header{padding:14px 20px;gap:12px}h1{font-size:13px}main{padding:20px 23px 16px}.meta{width:100%;text-align:left;margin:0}#presenter-notes{font-size:24px}footer{padding:10px 20px}nav{flex-wrap:wrap}}
+@media print{body{display:none}}
+</style>
+</head>
+<body>
+<header><span id="presenter-position"></span><h1 id="presenter-title"></h1><time id="presenter-time" role="timer" aria-label="Tempo decorrido da apresentação">00:00</time></header>
+<main><aside aria-label="Notas do orador"><h2>Seu roteiro de fala</h2><p id="notes-save-status" role="status"></p><textarea id="presenter-notes" aria-label="Editar notas do orador" spellcheck="true" lang="pt-BR" wrap="soft"></textarea></aside></main>
+<footer><nav aria-label="Navegação do orador"><button id="presenter-prev" type="button">Anterior</button><button id="presenter-forward" type="button">Próximo</button></nav><div class="timer-controls" role="group" aria-label="Cronômetro da apresentação"><button id="presenter-start" type="button">Iniciar</button><button id="presenter-stop" type="button">Parar</button><button id="presenter-reset" type="button">Zerar relógio</button></div><div class="meta"><p id="presenter-budget"></p><p id="presenter-next"></p></div></footer>
+</body>
+</html>`);
       doc.close();
       doc.getElementById('presenter-notes').addEventListener('input', event => {
         const index = Number(doc.body.dataset.slide);
@@ -990,13 +1046,13 @@ renderContent=function(s,i){
         } catch {
           doc.getElementById('notes-save-status').textContent = 'Edição disponível nesta sessão; o navegador não permitiu salvar.';
         }
-        sizeNotesEditor(doc);
       });
-      presenter.addEventListener('resize', () => sizeNotesEditor(doc));
 
       doc.getElementById('presenter-prev').addEventListener('click', () => showSlide(current - 1));
       doc.getElementById('presenter-forward').addEventListener('click', () => showSlide(current + 1));
-      doc.getElementById('presenter-reset').addEventListener('click', () => { presentationStart = Date.now(); updatePresenter(); });
+      doc.getElementById('presenter-start').addEventListener('click', startTimer);
+      doc.getElementById('presenter-stop').addEventListener('click', stopTimer);
+      doc.getElementById('presenter-reset').addEventListener('click', resetTimer);
       doc.addEventListener('keydown', handleKey);
       presenter.addEventListener('beforeunload', () => { document.getElementById('notes-button').setAttribute('aria-pressed', 'false'); });
       updatePresenter();
